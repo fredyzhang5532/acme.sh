@@ -1,16 +1,19 @@
 #!/usr/bin/env sh
+# shellcheck disable=SC2034
+dns_gandi_livedns_info='Gandi.net LiveDNS
+Site: Gandi.net/domain/dns
+Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_gandi_livedns
+Options:
+ GANDI_LIVEDNS_KEY API Key
+Issues: github.com/fcrozat/acme.sh
+Author: Frédéric Crozat <fcrozat@suse.com>, Dominik Röttsches <drott@google.com>
+'
 
 # Gandi LiveDNS v5 API
 # https://api.gandi.net/docs/livedns/
 # https://api.gandi.net/docs/authentication/ for token + apikey (deprecated) authentication
 # currently under beta
-#
-# Requires GANDI API KEY set in GANDI_LIVEDNS_KEY set as environment variable
-#
-#Author: Frédéric Crozat <fcrozat@suse.com>
-#        Dominik Röttsches <drott@google.com>
-#Report Bugs here: https://github.com/fcrozat/acme.sh
-#
+
 ########  Public functions #####################
 
 GANDI_LIVEDNS_API="https://api.gandi.net/v5/livedns"
@@ -20,6 +23,8 @@ dns_gandi_livedns_add() {
   fulldomain=$1
   txtvalue=$2
 
+  GANDI_LIVEDNS_KEY="${GANDI_LIVEDNS_KEY:-$(_readaccountconf_mutable GANDI_LIVEDNS_KEY)}"
+  GANDI_LIVEDNS_TOKEN="${GANDI_LIVEDNS_TOKEN:-$(_readaccountconf_mutable GANDI_LIVEDNS_TOKEN)}"
   if [ -z "$GANDI_LIVEDNS_KEY" ] && [ -z "$GANDI_LIVEDNS_TOKEN" ]; then
     _err "No Token or API key (deprecated) specified for Gandi LiveDNS."
     _err "Create your token or key and export it as GANDI_LIVEDNS_KEY or GANDI_LIVEDNS_TOKEN respectively"
@@ -28,11 +33,11 @@ dns_gandi_livedns_add() {
 
   # Keep only one secret in configuration
   if [ -n "$GANDI_LIVEDNS_TOKEN" ]; then
-    _saveaccountconf GANDI_LIVEDNS_TOKEN "$GANDI_LIVEDNS_TOKEN"
-    _clearaccountconf GANDI_LIVEDNS_KEY
+    _saveaccountconf_mutable GANDI_LIVEDNS_TOKEN "$GANDI_LIVEDNS_TOKEN"
+    _clearaccountconf_mutable GANDI_LIVEDNS_KEY
   elif [ -n "$GANDI_LIVEDNS_KEY" ]; then
-    _saveaccountconf GANDI_LIVEDNS_KEY "$GANDI_LIVEDNS_KEY"
-    _clearaccountconf GANDI_LIVEDNS_TOKEN
+    _saveaccountconf_mutable GANDI_LIVEDNS_KEY "$GANDI_LIVEDNS_KEY"
+    _clearaccountconf_mutable GANDI_LIVEDNS_TOKEN
   fi
 
   _debug "First detect the root zone"
@@ -53,6 +58,13 @@ dns_gandi_livedns_add() {
 dns_gandi_livedns_rm() {
   fulldomain=$1
   txtvalue=$2
+
+  GANDI_LIVEDNS_KEY="${GANDI_LIVEDNS_KEY:-$(_readaccountconf_mutable GANDI_LIVEDNS_KEY)}"
+  GANDI_LIVEDNS_TOKEN="${GANDI_LIVEDNS_TOKEN:-$(_readaccountconf_mutable GANDI_LIVEDNS_TOKEN)}"
+  if [ -z "$GANDI_LIVEDNS_KEY" ] && [ -z "$GANDI_LIVEDNS_TOKEN" ]; then
+    _err "No Token or API key (deprecated) specified for Gandi LiveDNS."
+    return 1
+  fi
 
   _debug "First detect the root zone"
   if ! _get_root "$fulldomain"; then
@@ -75,6 +87,20 @@ dns_gandi_livedns_rm() {
   _new_rrset_values=$(echo "$_new_rrset_values" | sed "s/\[ *,/\[/g")
   _debug "New rrset_values" "$_new_rrset_values"
 
+  # Last value removed: delete the record instead of leaving an empty TXT rrset.
+  if [ "$(echo "$_new_rrset_values" | tr -d ' ')" = "[]" ]; then
+    if ! _gandi_livedns_rest DELETE "domains/$_domain/records/$_sub_domain/TXT"; then
+      return 1
+    fi
+    _gandi_livedns_code="$(grep "^HTTP" "$HTTP_HEADER" | _tail_n 1 | cut -d " " -f 2 | tr -d "\\r\\n")"
+    if [ "$_gandi_livedns_code" != "204" ]; then
+      _err "Error deleting record: $response"
+      return 1
+    fi
+    _info "Removing record $(__green "success")"
+    return 0
+  fi
+
   _gandi_livedns_rest PUT \
     "domains/$_domain/records/$_sub_domain/TXT" \
     "{\"rrset_ttl\": 300, \"rrset_values\": $_new_rrset_values}" &&
@@ -92,7 +118,7 @@ _get_root() {
   i=2
   p=1
   while true; do
-    h=$(printf "%s" "$domain" | cut -d . -f $i-100)
+    h=$(printf "%s" "$domain" | cut -d . -f "$i"-100)
     _debug h "$h"
     if [ -z "$h" ]; then
       #not valid
@@ -109,7 +135,7 @@ _get_root() {
     elif _contains "$response" '"code": 404'; then
       _debug "$h not found"
     else
-      _sub_domain=$(printf "%s" "$domain" | cut -d . -f 1-$p)
+      _sub_domain=$(printf "%s" "$domain" | cut -d . -f 1-"$p")
       _domain="$h"
       return 0
     fi

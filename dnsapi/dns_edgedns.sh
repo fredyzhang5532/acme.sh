@@ -1,4 +1,15 @@
 #!/usr/bin/env sh
+# shellcheck disable=SC2034
+dns_edgedns_info='Akamai.com Edge DNS
+Site: techdocs.Akamai.com/edge-dns/reference/edge-dns-api
+Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_edgedns
+Options: Specify individual credentials
+ AKAMAI_HOST Host
+ AKAMAI_ACCESS_TOKEN Access token
+ AKAMAI_CLIENT_TOKEN Client token
+ AKAMAI_CLIENT_SECRET Client secret
+Issues: github.com/acmesh-official/acme.sh/issues/3157
+'
 
 # Akamai Edge DNS v2  API
 # User must provide Open Edgegrid API credentials to the EdgeDNS installation. The remote user in EdgeDNS must have CRUD access to
@@ -6,18 +17,10 @@
 
 # Report bugs to https://control.akamai.com/apps/support-ui/#/contact-support
 
-# Values to export:
-# --EITHER--
 # *** TBD. NOT IMPLEMENTED YET ***
-# specify Edgegrid credentials file and section
-# AKAMAI_EDGERC=<full file path>
-# AKAMAI_EDGERC_SECTION="default"
-## --OR--
-# specify indiviual credentials
-# export AKAMAI_HOST = <host>
-# export AKAMAI_ACCESS_TOKEN = <access token>
-# export AKAMAI_CLIENT_TOKEN = <client token>
-# export AKAMAI_CLIENT_SECRET = <client secret>
+# Specify Edgegrid credentials file and section.
+# AKAMAI_EDGERC Edge RC. Full file path
+# AKAMAI_EDGERC_SECTION Edge RC Section. E.g. "default"
 
 ACME_EDGEDNS_VERSION="0.1.0"
 
@@ -360,17 +363,12 @@ _edgedns_rest() {
 
 _edgedns_eg_timestamp() {
   _debug "Generating signature Timestamp"
-  _debug3 "Retriving ntp time"
-  _timeheaders="$(_get "https://www.ntp.org" "onlyheader")"
-  _debug3 "_timeheaders" "$_timeheaders"
-  _ntpdate="$(echo "$_timeheaders" | grep -i "Date:" | _head_n 1 | cut -d ':' -f 2- | tr -d "\r\n")"
-  _debug3 "_ntpdate" "$_ntpdate"
-  _ntpdate="$(echo "${_ntpdate}" | sed -e 's/^[[:space:]]*//')"
-  _debug3 "_NTPDATE" "$_ntpdate"
-  _ntptime="$(echo "${_ntpdate}" | _head_n 1 | cut -d " " -f 5 | tr -d "\r\n")"
-  _debug3 "_ntptime" "$_ntptime"
-  _eg_timestamp=$(date -u "+%Y%m%dT")
-  _eg_timestamp="$(printf "%s%s+0000" "$_eg_timestamp" "$_ntptime")"
+  #Akamai accepts a clock skew of +/-30s, so use the system clock directly.
+  #The previous code fetched the Date header from www.ntp.org, which is not
+  #a reliable time source (it served a wrong time for hours, issue 3973),
+  #cost an extra https round-trip for every API request, and combined the
+  #remote time of day with the LOCAL date, breaking around UTC midnight.
+  _eg_timestamp="$(date -u "+%Y%m%dT%H:%M:%S+0000")"
   _debug "_eg_timestamp" "$_eg_timestamp"
 }
 

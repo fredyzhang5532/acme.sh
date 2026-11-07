@@ -1,18 +1,18 @@
 #!/usr/bin/env sh
-#
-#Author: Bjarne Saltbaek
-#Report Bugs here: https://github.com/acmesh-official/acme.sh/issues/3732
-#
-#
+# shellcheck disable=SC2034
+dns_cpanel_info='cPanel Server API
+ Manage DNS via cPanel Dashboard.
+Site: cPanel.net
+Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_cpanel
+Options:
+ cPanel_Username Username
+ cPanel_Apitoken API Token
+ cPanel_Hostname Server URL. E.g. "https://hostname:port"
+Issues: github.com/acmesh-official/acme.sh/issues/3732
+Author: Bjarne Saltbaek
+'
+
 ########  Public functions #####################
-#
-# Export CPANEL username,api token and hostname in the following variables
-#
-# cPanel_Username=username
-# cPanel_Apitoken=apitoken
-# cPanel_Hostname=hostname
-#
-# Usage: add   _acme-challenge.www.domain.com   "XKrxpRBosdIKFzxW_CT3KLZNf6q0HG9i01zxXp5CPBs"
 
 # Used to add txt record
 dns_cpanel_add() {
@@ -38,7 +38,7 @@ dns_cpanel_add() {
   fi
   # adding entry
   _info "Adding the entry"
-  stripped_fulldomain=$(echo "$fulldomain" | sed "s/.$_domain//")
+  stripped_fulldomain="${fulldomain%."$_domain"}"
   _debug "Adding $stripped_fulldomain to $_domain zone"
   _myget "json-api/cpanel?cpanel_jsonapi_apiversion=2&cpanel_jsonapi_module=ZoneEdit&cpanel_jsonapi_func=add_zone_record&domain=$_domain&name=$stripped_fulldomain&type=TXT&txtdata=$txtvalue&ttl=1"
   if _successful_update; then return 0; fi
@@ -128,13 +128,27 @@ _get_root() {
     _err "Primary domain list not found!"
     return 1
   fi
-  for _domain in $_domains; do
-    _debug "Checking if $fulldomain ends with $_domain"
-    if (_endswith "$fulldomain" "$_domain"); then
-      _debug "Root domain: $_domain"
-      return 0
-    fi
+  # Pick the LONGEST matching zone, dot-anchored: with both domain.tld and
+  # sub.domain.tld zones on the account, cPanel stores the record in the
+  # most specific zone, so add and rm must both resolve to that one.
+  _domain=""
+  for d in $_domains; do
+    _debug "Checking if $fulldomain ends with $d"
+    # case with quoted patterns gives an exact literal suffix match;
+    # _endswith treats the needle as a regex, so its dots would let
+    # xdomain.tld wrongly match zone domain.tld
+    case "$fulldomain" in
+    "$d" | *".$d")
+      if [ "${#d}" -gt "${#_domain}" ]; then
+        _domain="$d"
+      fi
+      ;;
+    esac
   done
+  if [ -n "$_domain" ]; then
+    _debug "Root domain: $_domain"
+    return 0
+  fi
   return 1
 }
 

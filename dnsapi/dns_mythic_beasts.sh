@@ -1,4 +1,13 @@
 #!/usr/bin/env sh
+# shellcheck disable=SC2034
+dns_mythic_beasts_info='Mythic-Beasts.com
+Site: Mythic-Beasts.com
+Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_mythic_beasts
+Options:
+ MB_AK API Key
+ MB_AS API Secret
+Issues: github.com/acmesh-official/acme.sh/issues/3848
+'
 # Mythic Beasts is a long-standing UK service provider using standards-based OAuth2 authentication
 # To test: ./acme.sh --dns dns_mythic_beasts --test --debug 1 --output-insecure --issue --domain domain.com
 # Cannot retest once cert is issued
@@ -98,7 +107,7 @@ _get_root() {
 
   _debug "Detect the root zone"
   while true; do
-    h=$(printf "%s" "$domain" | cut -d . -f $i-100)
+    h=$(printf "%s" "$domain" | cut -d . -f "$i"-100)
     if [ -z "$h" ]; then
       _err "Domain exhausted"
       return 1
@@ -109,7 +118,7 @@ _get_root() {
     _mb_rest GET "$h/records"
     ret="$?"
     if [ "$ret" -eq 0 ]; then
-      _sub_domain=$(printf "%s" "$domain" | cut -d . -f 1-$p)
+      _sub_domain=$(printf "%s" "$domain" | cut -d . -f 1-"$p")
       _domain="$h"
       _debug _sub_domain "$_sub_domain"
       _debug _domain "$_domain"
@@ -177,7 +186,7 @@ _oauth2() {
 _oauth2_std() {
   # HTTP Basic Authentication
   _H1="Authorization: Basic $(echo "$MB_AK:$MB_AS" | _base64)"
-  _H2="Accepts: application/json"
+  _H2="Accept: application/json"
   export _H1 _H2
   body="grant_type=client_credentials"
 
@@ -201,7 +210,7 @@ _oauth2_std() {
 }
 
 _oauth2_github() {
-  _H1="Accepts: application/json"
+  _H1="Accept: application/json"
   export _H1
   body="{\"login\":{\"handle\":\"$MB_AK\",\"pass\":\"$MB_AS\",\"floating\":1}}"
 
@@ -232,7 +241,7 @@ _mb_rest() {
   fi
 
   _H1="Authorization: Bearer $MB_TK"
-  _H2="Accepts: application/json"
+  _H2="Accept: application/json"
   export _H1 _H2
   if [ "$data" ] || [ "$m" = "POST" ] || [ "$m" = "PUT" ] || [ "$m" = "DELETE" ]; then
     # body  url [needbase64] [POST|PUT|DELETE] [ContentType]

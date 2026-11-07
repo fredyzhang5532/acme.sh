@@ -1,14 +1,13 @@
 #!/usr/bin/env sh
-
-# Supports IONOS DNS API v1.0.1
-#
-# Usage:
-#   Export IONOS_PREFIX and IONOS_SECRET before calling acme.sh:
-#
-#   $ export IONOS_PREFIX="..."
-#   $ export IONOS_SECRET="..."
-#
-#   $ acme.sh --issue --dns dns_ionos ...
+# shellcheck disable=SC2034
+dns_ionos_info='IONOS.de
+Site: IONOS.de
+Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi2#dns_ionos
+Options:
+ IONOS_PREFIX Prefix
+ IONOS_SECRET Secret
+Issues: github.com/acmesh-official/acme.sh/issues/3379
+'
 
 IONOS_API="https://api.hosting.ionos.com/dns"
 IONOS_ROUTE_ZONES="/v1/zones"
@@ -17,7 +16,7 @@ IONOS_TXT_TTL=60 # minimum accepted by API
 IONOS_TXT_PRIO=10
 
 dns_ionos_add() {
-  fulldomain=$1
+  fulldomain="$(echo "$1" | _lower_case)"
   txtvalue=$2
 
   if ! _ionos_init; then
@@ -35,7 +34,7 @@ dns_ionos_add() {
 }
 
 dns_ionos_rm() {
-  fulldomain=$1
+  fulldomain="$(echo "$1" | _lower_case)"
   txtvalue=$2
 
   if ! _ionos_init; then
@@ -88,7 +87,7 @@ _get_root() {
     _response="$(echo "$_response" | tr -d "\n")"
 
     while true; do
-      h=$(printf "%s" "$domain" | cut -d . -f $i-100)
+      h=$(printf "%s" "$domain" | cut -d . -f "$i"-100)
       if [ -z "$h" ]; then
         return 1
       fi
@@ -97,7 +96,7 @@ _get_root() {
       if [ "$_zone" ]; then
         _zone_id=$(printf "%s\n" "$_zone" | _egrep_o "\"id\":\"[a-fA-F0-9\-]*\"" | _head_n 1 | cut -d : -f 2 | tr -d '\"')
         if [ "$_zone_id" ]; then
-          _sub_domain=$(printf "%s" "$domain" | cut -d . -f 1-$p)
+          _sub_domain=$(printf "%s" "$domain" | cut -d . -f 1-"$p")
           _domain=$h
 
           return 0
@@ -147,7 +146,7 @@ _ionos_rest() {
 
   if [ "$method" != "GET" ]; then
     export _H2="Accept: application/json"
-    export _H3="Content-Type: application/json"
+    export _H3=
 
     _response="$(_post "$data" "$IONOS_API$route" "" "$method" "application/json")"
   else

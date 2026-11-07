@@ -1,18 +1,18 @@
 #!/usr/bin/env sh
-#
-#Author: Wolfgang Ebner
-#Author: Sven Neubuaer
-#Report Bugs here: https://github.com/dampfklon/acme.sh
-#
-# Usage:
-# export ACMEDNS_BASE_URL="https://auth.acme-dns.io"
-#
-# You can optionally define an already existing account:
-#
-# export ACMEDNS_USERNAME="<username>"
-# export ACMEDNS_PASSWORD="<password>"
-# export ACMEDNS_SUBDOMAIN="<subdomain>"
-#
+# shellcheck disable=SC2034
+dns_acmedns_info='acme-dns Server API
+ The acme-dns is a limited DNS server with RESTful API to handle ACME DNS challenges.
+Site: github.com/joohoi/acme-dns
+Docs: github.com/acmesh-official/acme.sh/wiki/dnsapi#dns_acmedns
+Options:
+ ACMEDNS_USERNAME Username. Optional.
+ ACMEDNS_PASSWORD Password. Optional.
+ ACMEDNS_SUBDOMAIN Subdomain. Optional.
+ ACMEDNS_BASE_URL API endpoint. Default: "https://auth.acme-dns.io".
+Issues: github.com/dampfklon/acme.sh
+Author: Wolfgang Ebner, Sven Neubuaer
+'
+
 ########  Public functions #####################
 
 #Usage: dns_acmedns_add   _acme-challenge.www.domain.com   "XKrxpRBosdIKFzxW_CT3KLZNf6q0HG9i01zxXp5CPBs"
@@ -36,6 +36,16 @@ dns_acmedns_add() {
   ACMEDNS_USERNAME="${ACMEDNS_USERNAME:-$(_readdomainconf ACMEDNS_USERNAME)}"
   ACMEDNS_PASSWORD="${ACMEDNS_PASSWORD:-$(_readdomainconf ACMEDNS_PASSWORD)}"
   ACMEDNS_SUBDOMAIN="${ACMEDNS_SUBDOMAIN:-$(_readdomainconf ACMEDNS_SUBDOMAIN)}"
+
+  #for compatibility: old versions stored ACMEDNS_UPDATE_URL in the account
+  #conf (issue 3899). Do not clear it here: it must stay available for the
+  #other domains that have not migrated to their domain conf yet.
+  if [ -z "$ACMEDNS_BASE_URL" ]; then
+    _acmedns_update_url="$(_readaccountconf_mutable ACMEDNS_UPDATE_URL)"
+    if [ "$_acmedns_update_url" ]; then
+      ACMEDNS_BASE_URL="$(echo "$_acmedns_update_url" | sed 's#/update$##')"
+    fi
+  fi
 
   if [ "$ACMEDNS_BASE_URL" = "" ]; then
     ACMEDNS_BASE_URL="https://auth.acme-dns.io"
@@ -71,7 +81,7 @@ dns_acmedns_add() {
   data="{\"subdomain\":\"$ACMEDNS_SUBDOMAIN\", \"txt\": \"$txtvalue\"}"
 
   _debug data "$data"
-  response="$(_post "$data" "$ACMEDNS_UPDATE_URL" "" "POST")"
+  response="$(_post "$data" "$ACMEDNS_UPDATE_URL" "" "POST" "application/json")"
   _debug response "$response"
 
   if ! echo "$response" | grep "\"$txtvalue\"" >/dev/null; then
